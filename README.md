@@ -1,12 +1,14 @@
 # ABOUT THE PROJECT
 
-A simple platform for holding Nazo games. 
+一个简单的解密平台，本人做了一些简单的定制化开发。
 
-Demo is ~[Here](https://nazo.plus/)~(Stop maintaining. If you need original puzzles, contact me please.)
+原项目为[nazoplus](https://github.com/PHIKN1GHT/nazoplus)
 
 # ENVIRONMENT
 
-In packages.txt
+依赖: SQLAlchemy, Flask, waitress, mysql-connector-python
+python版本: 3.8
+运行指令 python3 nazoplus.py
 
 # LICENSE
 

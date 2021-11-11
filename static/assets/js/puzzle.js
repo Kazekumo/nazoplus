@@ -31,25 +31,6 @@ $("#submit").click(function(){
 });
 
 $("#next-level").click(function(){
-    $.ajax({
-        url: window.location.href+"/rate", type: "POST",
-        data: { rating: $('.ui.rating').rating('get rating') },
-        success: function (result) {
-            console.log(result);
-            window.location = window.location.href+"/next"
-        }
-    });
+    window.location.href='/';
 });
 
-$("#showhint").click(function(){
-    $.ajax({
-        url: window.location.href+"/hint", type: "GET",
-        success: function (result) {
-            $("#hinttext").text(result["hinttext"]);
-            //!result["success"]
-
-        }, error: function (xhr, ajaxOptions, thrownError) {
-            $("#hinttext").text("未知错误,请稍候重试");
-        }
-    });
-});

@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}
-Puzzle {{puzzle.id}} - {{puzzle.name}}
+disabled_button
 {% endblock %}
 {% block stylesheets %}
   {{ super() }}
@@ -41,14 +41,8 @@ Puzzle {{puzzle.id}} - {{puzzle.name}}
                     </div>
 
                     <div class="description">
-                        {% block description %}
-                        {% include 'descriptions/'+puzzle.id|string+'.html' %}
-                            {# <!-- 推荐的文件下载按钮 -->
-                            <a class="ui labeled icon button" style="margin-top:1rem" href="https://link/to/file">
-                                <i class="file icon"></i>下载附件
-                            </a>
-                            #}
-                        {% endblock %}
+                        <p>提交按钮不能按了,该怎么办呢?</p>
+                        <!-- 这题的答案是: mucfc_have_fun-->
                     </div>
                 </div>
 
@@ -58,7 +52,7 @@ Puzzle {{puzzle.id}} - {{puzzle.name}}
                     <div class="ui large transparent left icon input">
                             <i class="key icon"></i>
                             <input type="text" id="answer" placeholder="答案">
-                            <button class="ui teal button" type="submit" id="submit" >提交</button>
+                            <button class="ui teal button disabled" type="submit" id="submit" >提交</button>
                         </div>
                     <div class="ui negative hidden message" id="incorrect_answer">
                         <div class="header" id="message_header"></div>

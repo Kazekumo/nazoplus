@@ -1,17 +1,26 @@
 #encoding:utf-8
-from flask import Flask,render_template,jsonify,make_response,request,redirect,jsonify,session,escape,url_for
+from ctypes import resize
+from flask import Flask,render_template,jsonify,make_response,request,redirect,jsonify,session,escape,url_for,send_from_directory
+from flask.wrappers import Response
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.dialects.mysql import FLOAT
+from sqlalchemy import and_, or_, not_
 import uuid,os,hashlib
+from datetime import datetime
+
+startTime=datetime(2021, 10, 25, 18, 00)
 
 class Config:
 	basedir = os.path.abspath(os.path.dirname(__file__))
-	SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'app.db')
+	# SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'app.db')
+	SQLALCHEMY_DATABASE_URI = 'mysql+mysqlconnector://root:admin@localhost:3306/nazo'
 	SQLALCHEMY_MIGRATE_REPO = os.path.join(basedir, 'db_repository')
-
+	SQLALCHEMY_TRACK_MODIFICATIONS=True
 app = Flask(__name__)
-app.secret_key = 'KALE1D0<3DAHLIA'
+app.secret_key = 'KALE1D0<3DAHL1A'
 app.debug = False
 app.config.from_object(Config)
+app.add_template_global(round,"round")
 db = SQLAlchemy(app)
 
 class Puzzle(db.Model):
@@ -21,18 +30,9 @@ class Puzzle(db.Model):
 	score = db.Column(db.Integer, index=False, unique=False, nullable=False)
 	tried_num = db.Column(db.Integer, index=False, unique=False, nullable=False)
 	passed_num = db.Column(db.Integer, index=False, unique=False, nullable=False)
-	tags = db.Column(db.String(255), index=True, unique=False, nullable=True)
 	author = db.Column(db.String(255), index=True, unique=False, nullable=True)
-	special_judge = db.Column(db.String(255), index=False, unique=False, nullable=True)
 	answer = db.Column(db.String(255), index=False, unique=False, nullable=False)
-	custom_submit = db.Column(db.Boolean(), index=False, unique=False, nullable=False)
-	custom_title = db.Column(db.Boolean(), index=False, unique=False, nullable=False)
-	hint = db.Column(db.String(255), index=False, unique=False, nullable=True)
-
-	def getRating(self):
-		marks = Mark.query.filter_by(puzzle=self.id).all()
-		marks = list(map(lambda x: x.value, marks))
-		return '{:.1f}'.format(float(sum(marks)) / (1 if (len(marks) == 0) else len(marks)))
+	unique_template = db.Column(db.Boolean(), index=False, unique=False, nullable=False)
 
 	def getPassRate(self):
 		return '{:.1%}'.format(float(self.passed_num) / (1 if int(self.tried_num) == 0 else int(self.tried_num)))
@@ -42,30 +42,22 @@ class User(db.Model):
 	nickname = db.Column(db.String(64), index=True, unique=False)
 	email = db.Column(db.String(64), index=True, unique=True)
 	password_hash = db.Column(db.String(128), index=False, unique=False)
+	credit = db.Column(FLOAT(precision=10, scale=2), index=False, unique=False, nullable=False,default=0)
+	passed_num = db.Column(db.Integer, index=False, unique=False, nullable=False,default=0)
 
 	def verifyPassword(self, word):
-		return hashlib.md5(word).hexdigest() == self.password_hash
+		return hashlib.md5(word.encode("utf8")).hexdigest() == self.password_hash
 
 	def getData(self):
 		data = {}
+		data['id'] = self.id
 		data['email'] = self.email
 		data['nickname'] = self.nickname
-		data['credit'] = self.getCredit()
+		data['credit'] = self.credit
 		data['passed'] = self.getPassedPuzzles()
-		data['rank'] = self.getRank()
+		data['passed_num'] = self.passed_num
 		data['progress'] = '{:.0%}'.format(float(len(self.getPassedPuzzles())) / (1 if len(Puzzle.query.all()) == 0 else len(Puzzle.query.all()) - 1))
 		return data
-
-	def getCredit(self):
-		passed = self.getPassedPuzzles()
-		credit = 0
-		for puzzle in passed:
-			hint = Hint.query.filter_by(user=self.id,puzzle=puzzle).first()
-			if (hint != None):
-				credit = credit + (Puzzle.query.get(puzzle).score / 2)
-			else:
-				credit = credit + Puzzle.query.get(puzzle).score
-		return credit
 
 	def getPassedPuzzles(self):
 		puzzles = Puzzle.query.all()
@@ -76,28 +68,20 @@ class User(db.Model):
 				passed.append(puzzle.id)
 		return passed
 
-	def getRank(self):
-		users = User.query.all()
-		users.sort(key=lambda user: user.getCredit())
-		users.reverse()
-		return users.index(self) + 1
-
 class Submission(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
 	user = db.Column(db.Integer, db.ForeignKey('user.id'), unique=False, nullable=False)
 	puzzle = db.Column(db.Integer, db.ForeignKey('puzzle.id'), unique=False, nullable=False)
 	accepted = db.Column(db.Boolean, index=False, unique=False, nullable=False)
+	create_time=db.Column(db.DateTime, default=datetime.now)
 
-class Mark(db.Model):
-	id = db.Column(db.Integer, primary_key=True)
-	user = db.Column(db.Integer, db.ForeignKey('user.id'), unique=False, nullable=False)
-	puzzle = db.Column(db.Integer, db.ForeignKey('puzzle.id'), unique=False, nullable=False)
-	value = db.Column(db.Integer, index=False, unique=False, nullable=False)
-
-class Hint(db.Model):
-	id = db.Column(db.Integer, primary_key=True)
-	user = db.Column(db.Integer, db.ForeignKey('user.id'), unique=False, nullable=False)
-	puzzle = db.Column(db.Integer, db.ForeignKey('puzzle.id'), unique=False, nullable=False)
+	def getData(self):
+		data = {}
+		data['user'] = self.user
+		data['puzzle'] = self.puzzle
+		data['accepted'] = self.accepted
+		data['create_time'] = self.create_time
+		return data
 
 @app.route('/', methods=['GET'])
 def page_index():
@@ -105,15 +89,12 @@ def page_index():
 	if ('user' in session):
 		user = User.query.filter_by(email=session['user']['email']).first()
 		if (user == None):
-			redirect(url_for('logout'))
+			return redirect(url_for('logout'))
 		session['user'] = user.getData()
-		users = User.query.all()
-		users.sort(key=lambda user: user.getCredit())
-		users.reverse()
-		users = filter(lambda x:x.nickname != 'Anonymous', users)
+		topUser = User.query.order_by(User.credit.desc()).limit(10)
 		top10 = []
-		for user in users[:max(10,len(users))]:
-			top10.append({'nickname':user.nickname,'email':user.email,'credit':user.getCredit()})
+		for user in topUser:
+			top10.append({'nickname':user.nickname,'email':user.email,'credit':round(user.credit)})
 		page = render_template('index.html',user=session['user'],puzzles=puzzles,top10=top10)
 	else:
 		page = render_template('entry.html')
@@ -126,23 +107,45 @@ def page_puzzle(id):
 		return redirect(url_for('page_index'))
 	user = User.query.filter_by(email=session['user']['email']).first()
 	puzzle = Puzzle.query.get(int(id))
-	if (user.getCredit() < puzzle.unlock_score):
+	if (user.passed_num < puzzle.unlock_score):
 		return redirect(url_for('page_index'))
 	else:
-		return render_template('puzzle.html',puzzle=puzzle)
+		# 非通用模板
+		if(puzzle.unique_template):
+			return render_template('descriptions/%s.html'%(id),puzzle=puzzle)
+		else:
+			response=make_response(render_template('puzzle.html',puzzle=puzzle))
+			# 硬编码- -
+			# 如果 userAgent 题目
+			if(int(id)==13):
+				response.headers['Safe-Token'] = puzzle.answer
+			# 如果 cookie 题目
+			if(int(id)==14):
+				response.set_cookie('isAdmin','false')
+			return response
 
 @app.route('/puzzle/<id>/submit', methods=['POST'])
-def judge(id):
+def submit(id):
 	if (not 'user' in session):
 		return redirect(url_for('page_index'))
 	user = User.query.filter_by(email=session['user']['email']).first()
 	puzzle = Puzzle.query.get(int(id))
-	if ((not puzzle == None) and puzzle.answer == request.form['answer']):
-		puzzle.tried_num = puzzle.tried_num + 1
-		puzzle.passed_num = puzzle.passed_num + 1
+	if (not puzzle == None and judge(int(id),puzzle,request)):
 		submission = Submission.query.filter_by(user=user.id,puzzle=puzzle.id,accepted=True).first()
 		if (submission == None):
 			submission = Submission(user=user.id,puzzle=puzzle.id,accepted=True)
+
+			# ** 取消积分递减规则
+			# 获取的分数随着解答出的次数递减，具体系数为 max(0.5,1-x/20)
+			# factor=max(0.5,1-puzzle.passed_num/20)
+			# user.credit+=factor*puzzle.score
+
+			user.credit+=puzzle.score
+			user.passed_num+=1
+
+			puzzle.tried_num = puzzle.tried_num + 1
+			puzzle.passed_num = puzzle.passed_num + 1
+
 			db.session.add(submission)
 			db.session.commit()
 		return jsonify({"success":True,"correct":True})
@@ -153,18 +156,37 @@ def judge(id):
 		db.session.commit()
 		return jsonify({"success":True,"correct":False,"message_header":"再试一次吧","message":"答案不正确"})
 
+@app.route('/submission/stat', methods=['GET'])
+def stat():
+	maxCreditUser=User.query.order_by(User.credit.desc()).first()
+	topUser=User.query.filter_by(credit=maxCreditUser.credit).all()
+	topUserId=[x.id for x in topUser]
+	result=[x.getData() for x in topUser]
+	for item in result:
+		submission= Submission.query.filter_by(accepted=True).filter_by(user=item['id']).order_by(Submission.create_time.asc()).all()
+		totalTime=0
+		item['submission']=[]
+		for x in submission:
+			item['submission'].append(x.getData())
+			totalTime+=x.create_time.timestamp()-startTime.timestamp()
+		item['totalTime']=totalTime
+	result.sort(key=lambda r: r['totalTime'])
+	return jsonify({'topUser':result})
+	
+
 @app.route('/login', methods=['POST'])
 def login():
 	if ('user' in session):
 		return redirect(url_for('page_index'))
 	user = User.query.filter_by(email=request.form['email']).first()
 	if (user == None):
-		user = User(email=request.form['email'], nickname=request.form['nickname'],password_hash=hashlib.md5(request.form['password']).hexdigest())
+		user = User(email=request.form['email'], nickname=request.form['nickname'],password_hash=hashlib.md5(request.form['password'].encode("utf8")).hexdigest())
 		db.session.add(user)
 		session['user'] = user.getData()
 	else:
 		if (user.verifyPassword(request.form['password'])):
-			user.nickname = request.form['nickname']
+			if(request.form['nickname']):
+				user.nickname = request.form['nickname']
 			session['user'] = user.getData()
 		else:
 			return "<html><body><script type='text/javascript'>alert('您输入的密码与初设密码不符，验证无法通过！');window.location.href='/';</script></body></html>"
@@ -176,48 +198,19 @@ def logout():
 	session.pop('user')
 	return redirect(url_for('page_index'))
 
-@app.route('/anonymous', methods=['GET'])
-def anonymous():
-	user = User(email=''.join(str(uuid.uuid1()).split('-')).upper(), nickname="Anonymous",password_hash="")
-	db.session.add(user)
-	db.session.commit()
-	session['user'] = user.getData()
-	return redirect(url_for('page_index'))
-
-@app.route('/puzzle/<id>/rate', methods=['POST'])
-def rate(id):
-	if (not 'user' in session):
-		return redirect(url_for('page_index'))
-	user = User.query.filter_by(email=session['user']['email']).first()
-	mark = Mark.query.filter_by(user=user.id,puzzle=int(id)).first()
-	if (mark == None and int(request.form['rating']) > 0 and int(request.form['rating']) <= 5):
-		mark = Mark(user=user.id,puzzle=int(id),value=int(request.form['rating']))
-		db.session.add(mark)
-		db.session.commit()
-	return make_response("",200)
-
-@app.route('/puzzle/<id>/next', methods=['GET'])
-def next(id):
-	if (not 'user' in session):
-		return redirect(url_for('page_index'))
-	return redirect(url_for('page_puzzle',id=int(id)+1))
-
-@app.route('/puzzle/<id>/hint', methods=['GET'])
-def hint(id):
-	if (not 'user' in session):
-		return redirect(url_for('page_index'))
-	if (session['user']['nickname'] == 'Anonymous'):
-		return jsonify({"hinttext" : "抱歉，匿名用户无法查看提示，请注册登录后再进行此操作！"})
-	user = User.query.filter_by(email=session['user']['email']).first()
-	hint = Hint.query.filter_by(user=user.id,puzzle=int(id)).first()
-	submission = Submission.query.filter_by(user=user.id,puzzle=id,accepted=True).first()
-
-	if (hint == None and submission == None):
-		hint = Hint(user=user.id,puzzle=int(id))
-		db.session.add(hint)
-		db.session.commit()
-	puzzle = Puzzle.query.get(int(id))
-	return jsonify({"hinttext" : puzzle.hint})
+@app.route('/favicon.ico')
+def favicon():
+    return app.send_static_file('assets/img/favicon.ico')
+	
+def judge(id,puzzle,request):
+	if(id==13):
+		userAgent=request.headers.get('User-Agent')
+		return 'mucfc' in userAgent or 'MUCFC' in userAgent
+	if(id==14):
+		isAdmin=request.cookies.get("isAdmin")
+		return isAdmin=='true'
+	return puzzle.answer == request.form['answer']
 
 if __name__ == '__main__':
-	app.run(host='0.0.0.0',port=80)
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=80)

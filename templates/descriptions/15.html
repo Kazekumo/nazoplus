@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}
-Puzzle {{puzzle.id}} - {{puzzle.name}}
+wasm
 {% endblock %}
 {% block stylesheets %}
   {{ super() }}
@@ -19,7 +19,7 @@ Puzzle {{puzzle.id}} - {{puzzle.name}}
         </div>
     </div>
 
-    <div class="ui middle aligned center aligned grid">
+    <div class="ui middle aligned center aligned grid" id="body">
         <div class="column">
             <div class="ui raised centered large card">
                 {% block pre_block %}
@@ -41,14 +41,10 @@ Puzzle {{puzzle.id}} - {{puzzle.name}}
                     </div>
 
                     <div class="description">
-                        {% block description %}
-                        {% include 'descriptions/'+puzzle.id|string+'.html' %}
-                            {# <!-- 推荐的文件下载按钮 -->
-                            <a class="ui labeled icon button" style="margin-top:1rem" href="https://link/to/file">
-                                <i class="file icon"></i>下载附件
-                            </a>
-                            #}
-                        {% endblock %}
+                        <p>请输入密码</p>
+                        <p></p>
+                        <p></p>
+                        <blockquote class="meta" id="result"></blockquote>
                     </div>
                 </div>
 
@@ -57,7 +53,7 @@ Puzzle {{puzzle.id}} - {{puzzle.name}}
                 <div class="extra content">
                     <div class="ui large transparent left icon input">
                             <i class="key icon"></i>
-                            <input type="text" id="answer" placeholder="答案">
+                            <input type="text" id="answer" type="number" placeholder="答案">
                             <button class="ui teal button" type="submit" id="submit" >提交</button>
                         </div>
                     <div class="ui negative hidden message" id="incorrect_answer">
@@ -70,8 +66,10 @@ Puzzle {{puzzle.id}} - {{puzzle.name}}
         </div>
     </div>
     </div>
+    <script>
+function loadWebAssembly(a){return fetch(a).then(a=>a.arrayBuffer()).then(a=>WebAssembly.compile(a)).then(a=>new WebAssembly.Instance(a,{env:{__memory_base:0,'__table_base ':0,memory:new WebAssembly.Memory({initial:256}),table:new WebAssembly.Table({initial:256,element:'anyfunc'}),abort:alert}}))}loadWebAssembly('/static/assets/bin/function.wasm').then(a=>{const b=a.exports.checkPassword;$("#answer").fadeIn(),$("#answer").on('input',function(){$("#result").text("..."),setTimeout(function(){const a=Number($("#answer").val());if(isNaN(a)){$("#result").text('请输入数字');return}const c=b(a);$("#body").css({backgroundColor:c?'#C8E6C9':'#FFCDD2'}),$("#result").text(c?"密码正确！":"密码错误")},500)})})
+        </script>
 {% endblock %}
-
 {% block post_body_javascripts %}
   <script src="/static/assets/js/puzzle.js"></script>
 {% endblock %}
